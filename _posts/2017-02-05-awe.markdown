@@ -1,0 +1,17 @@
+---
+layout:     post
+title:      "要有敬畏心"
+subtitle:   ""
+date:       2017-02-05 12:00:00
+author:     "xuzp"
+header-img: "img/post-header/wx-common.jpg"
+catalog: true
+tags:
+    - Diary
+    - WX
+---
+
+人必须有敬畏心，知道自己能做到的和不能做到的，知道人力有时而穷。虽然任何人理论上都可以盲敲出操作系统和控制火星车的代码，但毕竟只是理论可行，实际是不可行的。对程序有敬畏心，可以让bug少一点；对他人谦逊一点，可以收获更多。
+
+
+—— xuzp 记于 2017.2.5
