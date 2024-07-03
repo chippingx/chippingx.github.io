@@ -1,0 +1,16 @@
+---
+layout:     post
+title:      "唯快不破"
+subtitle:   ""
+date:       2017-02-17 12:00:00
+author:     "xuzp"
+header-img: "img/post-header/wx-common.jpg"
+catalog: false
+tags:
+    - Diary
+    - WX
+---
+
+软件开发中，需求一直会变，市场风口一直会变，人员一直会变，技术潮流也一直会变... 所面临的问题只能靠“快”去弥补。有想法就马上去动手做，迅速推出成品，迭代或舍弃；速度越快，成本越低，机会越多。
+
+—— xuzp 记于 2017.2.17
