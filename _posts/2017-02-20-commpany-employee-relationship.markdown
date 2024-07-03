@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "公司是员工的\“贵人\”"
+title:      "公司是员工的“贵人”"
 subtitle:   ""
 date:       2017-02-20 12:00:00
 author:     "xuzp"
