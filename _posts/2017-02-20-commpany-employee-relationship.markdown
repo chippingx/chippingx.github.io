@@ -7,7 +7,8 @@ author:     "xuzp"
 header-img: "img/post-header/wx-common.jpg"
 catalog: false
 tags:
-    - Diary
+    - 技术
+    - 逻辑思辨
     - WX
 ---
 

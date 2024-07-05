@@ -7,7 +7,8 @@ author:     "xuzp"
 header-img: "img/post-bg-2024.jpg"
 catalog: true
 tags:
-    - Diary
+    - 碎念
+    - 里程碑
 ---
 
 > "Hello, world"

@@ -7,7 +7,7 @@ author:     "xuzp"
 header-img: "img/post-header/wx-common.jpg"
 catalog: false
 tags:
-    - Diary
+    - 管理
     - WX
 ---
 

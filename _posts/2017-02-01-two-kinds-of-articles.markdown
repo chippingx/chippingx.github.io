@@ -7,7 +7,8 @@ author:     "xuzp"
 header-img: "img/post-header/20270201.jpg"
 catalog: true
 tags:
-    - Diary
+    - 作文
+    - 里程碑
     - WX
 ---
 
