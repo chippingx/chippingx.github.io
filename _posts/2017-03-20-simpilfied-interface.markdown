@@ -8,6 +8,7 @@ header-img: "img/post-header/wx-common.jpg"
 catalog: false
 tags:
     - 技术
+    - AI
     - WX
 ---
 
