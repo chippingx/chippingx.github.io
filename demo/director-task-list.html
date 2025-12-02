@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>监护/主管 · 任务清单</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body>
+  <!-- 布局由 simulator-layout.js 自动创建 -->
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    // 初始化布局
+    initSimulatorLayout({
+      title: '任务清单 · 监护/主管',
+      titleIcon: 'fas fa-list',
+      role: 'director',
+      activeNav: 'tasks',
+      content: `
+        <div class="flex flex-col h-full">
+          <!-- 顶部搜索和筛选区 -->
+          <div class="px-4 py-3 bg-white shadow-sm z-10">
+            <div class="flex gap-2 mb-3">
+              <div class="relative flex-1">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input id="search" type="text" placeholder="搜索任务号/类型..." 
+                  class="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-0 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none text-gray-700 placeholder-gray-400">
+              </div>
+              <div class="relative w-32" id="sortTrigger">
+                <i class="fas fa-sort absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <div class="w-full pl-9 pr-8 py-2.5 bg-gray-50 border-0 rounded-xl text-sm text-gray-700 flex items-center cursor-pointer active:bg-gray-100 transition-colors">
+                  <span id="sortText" class="truncate">时间顺序</span>
+                </div>
+                <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+              </div>
+            </div>
+
+            <!-- 状态选项卡 -->
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              <button id="tabApprovals" class="flex-none px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap">待审批</button>
+              <button id="tabGuard" class="flex-none px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap">待监护</button>
+              <button id="tabDone" class="flex-none px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap">已处理</button>
+            </div>
+          </div>
+
+          <!-- 任务列表容器 -->
+          <div id="list" class="flex-1 overflow-y-auto p-4 space-y-3 pb-24 bg-gray-50/50"></div>
+        </div>
+      `
+    });
+
+    // 页面逻辑
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialFilter = urlParams.get('filter') || 'approvals';
+    const tasks = [
+      { id: 'TN20240520021', type: 'approval', title:'强制完成申请', status: 'approvals', wait: 12, priority: 'high', created_at: Date.now() - 12*60000 },
+      { id: 'TN20240530005', type: 'guard', title:'大件监护', status: 'guard', wait: 5, priority: 'normal', created_at: Date.now() - 5*60000 },
+      { id: 'TN20240520023', type: 'issue', title:'异常审批', status: 'approvals', wait: 20, priority: 'normal', created_at: Date.now() - 20*60000 },
+      { id: 'TN20240520024', type: 'approval', title:'暂停申请', status: 'done', wait: 0, priority: 'normal', created_at: Date.now() - 120*60000 }
+    ];
+
+    function render(){
+      const search = document.getElementById('search').value.trim().toLowerCase();
+      const sort = currentSort;
+      let filtered = tasks.filter(t=>mapFilter(currentFilter).includes(t.status));
+      
+      if(search){ 
+        filtered = filtered.filter(t=>t.id.toLowerCase().includes(search) || (t.title||'').toLowerCase().includes(search)); 
+      }
+      
+      if(sort==='type'){ 
+        filtered.sort((a,b)=> (a.type||'').localeCompare(b.type||'') || a.id.localeCompare(b.id)); 
+      } else { 
+        // Sort by time (mock created_at)
+        filtered.sort((a,b)=> (b.created_at||0) - (a.created_at||0)); 
+      }
+
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      
+      if(filtered.length===0){ 
+        list.innerHTML = `<div class='flex flex-col items-center justify-center py-12 text-gray-400'>
+          <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+            <i class="fas fa-clipboard-list text-2xl text-gray-300"></i>
+          </div>
+          <div class="text-sm">暂无任务</div>
+        </div>`; 
+        return; 
+      }
+
+      filtered.forEach(t=>{
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform cursor-pointer relative overflow-hidden group';
+        
+        let badgeClass = '';
+        let statusText = labelOf(t.status);
+        
+        if(t.status==='approvals') badgeClass = 'bg-yellow-50 text-yellow-700 border border-yellow-100';
+        else if(t.status==='guard') badgeClass = 'bg-blue-50 text-blue-700 border border-blue-100';
+        else badgeClass = 'bg-green-50 text-green-700 border border-green-100';
+
+        // Action button only for active tasks
+        const actionBtn = t.status!=='done' ? 
+          `<button class='px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white shadow-sm shadow-indigo-200 active:bg-indigo-700 hover:bg-indigo-700 transition-colors' onclick=\"event.stopPropagation(); goConsole('${t.id}')\">
+            <i class='fas fa-briefcase mr-1'></i>处理
+           </button>` : '';
+
+        // Mock wait time display
+        const waitTime = t.wait > 60 ? Math.floor(t.wait/60)+'小时' : t.wait+'分钟';
+        const waitDisplay = t.status!=='done' ? `<div class="flex items-center text-xs text-gray-400"><i class="fas fa-clock mr-1.5"></i>等待 ${waitTime}</div>` : '';
+
+        item.innerHTML = `
+          <div class='flex items-start justify-between mb-3'>
+            <div>
+              <div class='flex items-center gap-2'>
+                <span class='text-base font-bold text-gray-800 group-hover:text-indigo-600 transition-colors'>${t.id}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 border border-gray-100 uppercase tracking-wider">${t.type.toUpperCase()}</span>
+              </div>
+              <div class='text-sm text-gray-600 mt-1 font-medium'>${t.title}</div>
+            </div>
+            <span class='px-2 py-1 rounded-lg text-xs font-medium ${badgeClass}'>${statusText}</span>
+          </div>
+          
+          <div class="flex items-center justify-between mt-2 pt-3 border-t border-gray-50">
+            ${waitDisplay || '<div></div>'}
+            <div class='flex items-center gap-2'>
+              ${actionBtn}
+              ${t.status==='done' ? '<span class="text-xs text-gray-400 flex items-center"><i class="fas fa-check-circle mr-1 text-green-500"></i>已完成</span>' : ''}
+            </div>
+          </div>
+          
+          <!-- Chevron for navigation hint -->
+          ${t.status==='done' ? `<div class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-chevron-right"></i></div>` : ''}
+        `;
+        
+        item.onclick = ()=>{ goDetail(t.id); };
+        list.appendChild(item);
+      });
+    }
+
+    function mapFilter(f){ if(f==='approvals') return ['approvals']; if(f==='guard') return ['guard']; return ['done']; }
+    function labelOf(status){ if(status==='approvals') return '待审批'; if(status==='guard') return '待监护'; return '已处理'; }
+    function goDetail(id){ const origin = (currentFilter==='guard'?'guard':'approval'); window.location.href = 'director-task-detail.html?task_id=' + encodeURIComponent(id) + '&origin=' + origin; }
+    function goConsole(id){ if(currentFilter==='guard'){ window.location.href = 'director-guard.html?task_id=' + encodeURIComponent(id); } else { window.location.href = 'director-ops.html?q=' + encodeURIComponent(id); } }
+    
+    function setActiveTabs(){
+      ['Approvals','Guard','Done'].forEach(key => {
+        const btn = document.getElementById('tab'+key);
+        const filterKey = key.toLowerCase();
+        if(currentFilter === filterKey){
+          btn.className = 'flex-none px-4 py-2 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-sm shadow-indigo-200 transition-all';
+        } else {
+          btn.className = 'flex-none px-4 py-2 rounded-full text-sm font-medium bg-white text-gray-500 border border-gray-200 hover:bg-gray-50 transition-all';
+        }
+      });
+    }
+
+    let currentFilter = initialFilter;
+    document.getElementById('tabApprovals').onclick = ()=>{ currentFilter='approvals'; setActiveTabs(); render(); };
+    document.getElementById('tabGuard').onclick = ()=>{ currentFilter='guard'; setActiveTabs(); render(); };
+    document.getElementById('tabDone').onclick = ()=>{ currentFilter='done'; setActiveTabs(); render(); };
+    document.getElementById('search').oninput = render;
+    // document.getElementById('sort').onchange = render; // Removed
+
+    let currentSort = 'time';
+    const sortOptions = [
+        { value: 'time', label: '时间顺序' },
+        { value: 'type', label: '任务类型' }
+    ];
+    const sortPanel = window.createSelectionPanel({
+        id: 'sortPanel',
+        title: '排序方式',
+        confirmText: '确认',
+        onConfirm: function(val){
+            if(!val) return;
+            currentSort = val;
+            const label = sortOptions.find(o=>o.value===val)?.label || val;
+            document.getElementById('sortText').textContent = label;
+            sortPanel.close();
+            render();
+        }
+    });
+    document.getElementById('sortTrigger').onclick = function(){
+        sortPanel.open(sortOptions, currentSort);
+    };
+
+    setActiveTabs();
+    render();
+  </script>
+</body>
+</html>

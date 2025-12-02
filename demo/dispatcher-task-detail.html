@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>调度员 · 任务详情</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '任务详情 · 调度员',
+      titleIcon: 'fas fa-clipboard-list',
+      role: 'dispatcher',
+      activeNav: 'tasks',
+      content: `
+        <div class="px-6 py-4 pb-28">
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-10 -mt-10 z-0"></div>
+              <div class="relative z-10 flex items-center justify-between">
+                <div>
+                  <div class="text-xs text-gray-500 mb-1">任务号</div>
+                  <div id="tfId" class="text-xl font-bold text-gray-800 tracking-tight">--</div>
+                </div>
+                <div class="text-right">
+                   <div id="tfStatusBadge" class="inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600">--</div>
+                   <div class="text-xs text-gray-400 mt-2 mb-1"><i class="fas fa-clock mr-1"></i>等待 <span id="tfWait">--</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+              <button id="tabBasic" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">基本信息</button>
+              <button id="tabDispatch" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">调度信息</button>
+              <button id="tabCargo" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">货物信息</button>
+              <button id="tabRecord" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">物流日志</button>
+            </div>
+
+            <div id="panelBasic" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+              <div class="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
+                <div class="col-span-2 pb-3 border-b border-gray-50 flex items-center justify-between">
+                   <span id="lblTop" class="text-gray-500">当前库门</span>
+                   <span id="valTop" class="font-bold text-indigo-600 text-base">--</span>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-400 mb-0.5">车牌号码</div>
+                  <div id="tfPlate" class="font-medium text-gray-800">--</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-400 mb-0.5">客户名称</div>
+                  <div id="tfCustomer" class="font-medium text-gray-800">--</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-400 mb-0.5">司机</div>
+                  <div id="tfDriver" class="font-medium text-gray-800">--</div>
+                </div>
+                <div>
+                  <div class="text-xs text-gray-400 mb-0.5">联系方式</div>
+                  <div id="tfPhone" class="font-medium text-gray-800">--</div>
+                </div>
+                <div id="divOversize">
+                  <div class="text-xs text-gray-400 mb-0.5">预报大件</div>
+                  <div id="cgOversizeInfo" class="font-medium text-gray-800">--</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="panelCargo" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-box-open text-indigo-500 mr-2"></i>货物信息</div>
+              <div class="space-y-3 text-sm">
+                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
+                  <span class="text-gray-500">件数</span>
+                  <div class="font-medium text-gray-800"><span id="cgCount">--</span> 件</div>
+                </div>
+                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
+                  <span class="text-gray-500">总重量</span>
+                  <div class="font-medium text-gray-800"><span id="cgWeight">--</span> kg</div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-500">总体积</span>
+                  <div class="font-medium text-gray-800"><span id="cgVolume">--</span> m³</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="panelRecord" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-history text-indigo-500 mr-2"></i>物流日志</div>
+              <div id="rcList" class="space-y-4 relative before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-100"></div>
+            </div>
+
+            <div id="panelDispatch" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-random text-indigo-500 mr-2"></i>调度信息</div>
+              <div class="space-y-3 text-sm">
+                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
+                  <span class="text-gray-500">队列位置</span>
+                  <div id="dpQueue" class="font-medium text-gray-800">--</div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-500">限制状态</span>
+                  <div id="dpLimit" class="font-medium text-gray-800">--</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="fixed bottom-4 left-4 right-4 bg-white rounded-2xl shadow-lg shadow-gray-200 border border-gray-100 p-3 z-40 flex items-center gap-3 max-w-md mx-auto">
+                <button class="p-3 rounded-xl bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors" onclick="goBack()"><i class="fas fa-arrow-left"></i></button>
+                <button id="btnAssignChange" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium shadow-sm active:scale-[0.98] transition-transform flex items-center justify-center">
+                  <i id="btnIcon" class="fas fa-door-open mr-2"></i><span id="btnText">分配库门</span>
+                </button>
+            </div>
+          </div>
+        `
+    });
+  </script>
+  <script>
+    function qs(name){ const u=new URLSearchParams(window.location.search); return u.get(name); }
+    const taskId = qs('task_id');
+    
+    let appData = null;
+    function loadData(){
+        const url = new URL('app-data.json', document.baseURI).href;
+        if(location.protocol === 'file:'){
+            appData = (window.APP_DATA_FALLBACK || {}); 
+            return Promise.resolve(appData);
+        }
+        return fetch(url).then(r => r.json()).then(d => { appData = d; return d; }).catch(e=>{ console.error(e); return {}; });
+    }
+
+    let task = {};
+    let doors = [];
+
+    function render(){
+      if(!appData) return;
+      const tasks = appData.inboundTasks || [];
+      doors = appData.doors || [];
+      
+      task = tasks.find(t => t.id === taskId) || {};
+      if(!task.id){
+          toastShow('任务不存在');
+          setTimeout(()=>window.history.back(), 1000);
+          return;
+      }
+
+      // Map task fields to UI
+      // Note: app-data.json structure might be slightly different than previous sample
+      // task: { id, status, prePlate, packType, wait, door, cargo: {}, ownerName, ... }
+      
+      document.getElementById('tfId').textContent = task.id;
+      
+      // Status Badge
+      const badge = document.getElementById('tfStatusBadge');
+      badge.textContent = labelOf(task.status);
+      if(task.status==='pending') badge.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-100';
+      else if(['queue','working'].includes(task.status)) badge.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100';
+      else badge.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 border border-green-100';
+
+      document.getElementById('tfWait').textContent = (task.wait || 0) + ' min';
+      
+      // Dynamic Top Row logic
+      const hasOversize = (task.cargo && task.cargo.weight > 2000) ? '是' : '否';
+      
+      document.getElementById('lblTop').textContent = '当前库门';
+      document.getElementById('valTop').textContent = task.door || '--';
+      
+      // Always show Oversize info in grid (as requested)
+      document.getElementById('divOversize').style.display = 'block';
+      document.getElementById('cgOversizeInfo').textContent = hasOversize;
+
+      document.getElementById('tfPlate').textContent = task.plate || task.prePlate || '--';
+      document.getElementById('tfCustomer').textContent = task.ownerName || task.customer || '--';
+      document.getElementById('tfDriver').textContent = task.driver || task.ownerContact || '--';
+      document.getElementById('tfPhone').textContent = task.driverPhone || task.ownerPhone || '--';
+      
+      if(task.cargo){
+          document.getElementById('cgCount').textContent = task.cargo.count || '--';
+          document.getElementById('cgWeight').textContent = task.cargo.weight || '--';
+          document.getElementById('cgVolume').textContent = task.cargo.volume || '--';
+      }
+      
+      // Records/Workflow - Mock data or find in operatorTaskDetails if available
+      // We can look up operatorTaskDetails using ID if we want more details
+      const detail = (appData.operatorTaskDetails && appData.operatorTaskDetails[taskId]) || {};
+      const records = detail.workflow || detail.records || [ { t: '09:00', d: '任务创建' } ];
+
+      const list = document.getElementById('rcList');
+      list.innerHTML = '';
+      records.forEach((r, idx)=>{ 
+        const row=document.createElement('div'); 
+        row.className='relative pl-4'; 
+        const updater = r.u || '调度员'; // Mock updater
+        row.innerHTML=`
+          <div class="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-indigo-100 border-2 border-white shadow-sm z-10"></div>
+          <div class="flex items-center justify-between text-sm py-0.5">
+             <span class="font-bold text-gray-800">${r.d}</span>
+             <div class="flex items-center gap-2 text-xs">
+               <span class="text-gray-500">${updater}</span>
+               <span class="text-gray-400 font-mono">${r.t}</span>
+             </div>
+          </div>
+        `; 
+        list.appendChild(row); 
+      });
+      
+      // Dispatch Info
+      const doorInfo = detail.doorInfo || {};
+      document.getElementById('dpQueue').textContent = doorInfo.queue || '未入队';
+      document.getElementById('dpLimit').textContent = doorInfo.limit || '正常';
+      
+      updateAction();
+    }
+    
+    function labelOf(status){ 
+        if(status==='pending') return '待分配'; 
+        if(status==='queue') return '队列中'; 
+        if(status==='working') return '作业中';
+        if(status==='completed') return '已完成';
+        if(status==='cancelled') return '已取消';
+        return status; 
+    }
+
+    function active(tab){ 
+      ['Basic','Dispatch','Cargo','Record'].forEach(x=>{ 
+        const btn=document.getElementById('tab'+x); 
+        const panel=document.getElementById('panel'+x); 
+        if(x===tab){ 
+          // Selected: Bold, bg-indigo-50, text-indigo-700
+          btn.className = 'flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm';
+          panel.classList.remove('hidden'); 
+        } else { 
+          btn.className = 'flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50';
+          panel.classList.add('hidden'); 
+        } 
+      }); 
+    }
+
+    function updateAction(){ 
+      const t=document.getElementById('btnText'); 
+      const i=document.getElementById('btnIcon'); 
+      const btn=document.getElementById('btnAssignChange');
+      if(!t||!i) return; 
+      
+      const assigned = task.door && task.door!=='-' && task.door!=='--'; 
+      
+      if(task.status === 'completed' || task.status === 'cancelled'){
+          btn.style.display = 'none';
+          return;
+      }
+      
+      // Logic: if assigned (queue/working) -> Change; else -> Assign
+      if(assigned){ 
+        t.textContent='更改库门'; 
+        i.className='fas fa-exchange-alt mr-2'; 
+        btn.onclick = openDispatchPanel;
+      } else { 
+        t.textContent='分配库门'; 
+        i.className='fas fa-door-open mr-2'; 
+        btn.onclick = openDispatchPanel;
+      } 
+    }
+    
+    function goBack(){ window.location.href = 'dispatcher-task-list.html'; }
+    function openLog(){ toastShow('日志功能暂未开放'); }
+    
+    // Dispatch Panel
+    let dispatchPanel = window.createSelectionPanel({
+        id: 'dispatchPanel',
+        title: '选择库门',
+        confirmText: '确认',
+        onConfirm: function(val){
+            if(!val){ toastShow('请选择库门'); return; }
+            dispatchPanel.close();
+            // Update logic
+            task.door = val;
+            if(task.status === 'pending') task.status = 'queue';
+            render();
+            toastShow(`已将任务分配至 ${val}`, 'ok');
+        }
+    });
+    
+    function openDispatchPanel(){
+        const validDoors = doors.filter(d => d.status !== 'paused' && d.status !== 'limited');
+        const items = validDoors.map(d => {
+             const st = labelDoorStatus(d.status);
+             const oz = d.supportsOversize ? '支持大件' : '不支持大件';
+             return {
+                 value: d.id,
+                 label: `库门 ${d.id} · ${oz} · 排队 ${d.queue} · ${st}`
+             };
+        });
+        dispatchPanel.open(items);
+    }
+    function labelDoorStatus(s){ if(s==='working') return '作业中'; if(s==='idle') return '空闲'; if(s==='paused') return '已暂停'; if(s==='limited') return '限制中'; return s; }
+
+    // Tabs
+    document.getElementById('tabBasic').onclick = ()=>active('Basic');
+    document.getElementById('tabDispatch').onclick = ()=>active('Dispatch');
+    document.getElementById('tabCargo').onclick = ()=>active('Cargo');
+    document.getElementById('tabRecord').onclick = ()=>active('Record');
+
+    active('Basic'); // Ensure default state
+    loadData().then(render);
+  </script>
+</body>
+</html>

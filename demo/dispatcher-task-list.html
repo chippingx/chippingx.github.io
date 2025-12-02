@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>调度员 · 任务清单</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '任务清单 · 调度员',
+      titleIcon: 'fas fa-list',
+      role: 'dispatcher',
+      activeNav: 'tasks',
+      content: `
+        <div class="px-6 py-4 pb-28">
+          <div class="card rounded-2xl p-4 mb-3">
+            <div class="grid grid-cols-2 gap-2 mb-3">
+              <input id="search" class="px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="搜索任务号/车牌..." />
+              <div id="sortTrigger" class="px-3 py-2 border border-gray-200 rounded-lg text-sm flex items-center justify-between cursor-pointer active:bg-gray-50 transition-all bg-white">
+                <span id="sortText">按时间顺序</span>
+                <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs overflow-x-auto pb-2 scrollbar-hide">
+              <button id="tabPending" class="flex-none px-4 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium transition-colors">待分配</button>
+              <button id="tabQueue" class="flex-none px-4 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium transition-colors">队列中</button>
+              <button id="tabDone" class="flex-none px-4 py-1.5 rounded-full bg-gray-100 text-gray-600 font-medium transition-colors">已完成</button>
+            </div>
+          </div>
+
+          <div id="list" class="space-y-3"></div>
+        </div>
+      `
+    });
+  </script>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialFilter = urlParams.get('filter') || 'pending';
+    
+    let appData = null;
+    function loadData(){
+        const url = new URL('app-data.json', document.baseURI).href;
+        if(location.protocol === 'file:'){
+            appData = (window.APP_DATA_FALLBACK || {}); 
+            return Promise.resolve(appData);
+        }
+        return fetch(url).then(r => r.json()).then(d => { appData = d; return d; }).catch(e=>{ console.error(e); return {}; });
+    }
+
+    let tasks = [];
+    let doors = [];
+
+    let currentSort = 'time';
+    const sortOptions = [
+        { value: 'time', label: '按时间顺序' },
+        { value: 'type', label: '按任务类型' }
+    ];
+    const sortPanel = window.createSelectionPanel({
+        id: 'sortPanel',
+        title: '排序方式',
+        confirmText: '确认',
+        onConfirm: function(val){
+            if(!val) return;
+            currentSort = val;
+            const label = sortOptions.find(o=>o.value===val)?.label || val;
+            document.getElementById('sortText').textContent = label;
+            sortPanel.close();
+            render();
+        }
+    });
+    document.getElementById('sortTrigger').onclick = function(){
+        sortPanel.open(sortOptions, currentSort);
+    };
+
+    function render(){
+      if(!appData) return;
+      tasks = appData.inboundTasks || [];
+      doors = appData.doors || [];
+
+      const search = document.getElementById('search').value.trim().toLowerCase();
+      const sort = currentSort;
+      
+      // Mapping filter to status
+      let targetStatuses = [];
+      if(currentFilter === 'pending') targetStatuses = ['pending'];
+      else if(currentFilter === 'queue') targetStatuses = ['queue', 'working', 'paused', 'limited']; // Broaden queue to include active states
+      else targetStatuses = ['completed', 'cancelled'];
+
+      let filtered = tasks.filter(t => targetStatuses.includes(t.status));
+
+      if(search){ filtered = filtered.filter(t=>t.id.toLowerCase().includes(search) || (t.plate && t.plate.toLowerCase().includes(search))); }
+      
+      if(sort==='type'){ filtered.sort((a,b)=> (String(a.type||'').localeCompare(String(b.type||''))) || a.id.localeCompare(b.id)); }
+      else { filtered.sort((a,b)=> a.id.localeCompare(b.id)); }
+      
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      if(filtered.length===0){ list.innerHTML = `<div class='card rounded-2xl p-8 text-center text-sm text-gray-500 flex flex-col items-center'><i class="fas fa-clipboard-list text-4xl text-gray-300 mb-3"></i>暂无任务</div>`; return; }
+      
+      filtered.forEach(t=>{
+        const item = document.createElement('div');
+        item.className = 'bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.99] transition-transform';
+        
+        let badgeClass = '';
+        let badgeText = labelOf(t.status);
+        if(t.status==='pending') badgeClass = 'bg-yellow-50 text-yellow-700 border border-yellow-100';
+        else if(['queue','working'].includes(t.status)) badgeClass = 'bg-blue-50 text-blue-700 border border-blue-100';
+        else badgeClass = 'bg-green-50 text-green-700 border border-green-100';
+
+        // Button Logic: Assign vs Change
+        // If pending -> Assign
+        // If queue/working (already has door) -> Change
+        let actionBtn = '';
+        if(t.status !== 'completed' && t.status !== 'cancelled'){
+            const isAssigned = t.door && t.door !== '-' && t.door !== '--';
+            const btnText = isAssigned ? '更改库门' : '分配库门';
+            const btnIcon = isAssigned ? 'fa-exchange-alt' : 'fa-random';
+            actionBtn = `<button class='px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white shadow-sm shadow-indigo-200 active:bg-indigo-700' onclick=\"event.stopPropagation(); openDispatchPanel('${t.id}')\"><i class='fas ${btnIcon} mr-1'></i>${btnText}</button>`;
+        }
+        
+        const oversizeTag = (t.cargo && t.cargo.weight > 2000) ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 ml-2">重货</span>' : ''; 
+        const typeTag = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200 ml-2">${t.packType||'普通'}</span>`;
+
+        // Info Field: Pending -> Oversize Info; Others -> Door Info
+        let infoField = '';
+        if(t.status === 'pending'){
+            const isOversize = (t.packType==='oversize'||t.type==='oversize'||(t.cargo&&t.cargo.weight>1000));
+            infoField = `<div class="flex items-center"><i class="fas fa-info-circle text-gray-400 w-5"></i><span>预报大件: <b class="text-gray-800">${isOversize?'是':'否'}</b></span></div>`;
+        } else {
+            infoField = `<div class="flex items-center"><i class="fas fa-door-open text-gray-400 w-5"></i><span>库门: <b class="text-gray-800">${t.door || '--'}</b></span></div>`;
+        }
+
+        item.innerHTML = `
+          <div class='flex items-start justify-between mb-2'>
+            <div>
+              <div class='flex items-center'>
+                <span class='text-base font-bold text-gray-800'>${t.id}</span>
+                ${typeTag}
+                ${oversizeTag}
+              </div>
+              <div class="text-xs text-gray-500 mt-0.5"><i class="fas fa-truck text-gray-400 mr-1"></i>${t.plate || t.prePlate || '--'}</div>
+            </div>
+            <span class='px-2 py-1 rounded-lg text-xs font-medium ${badgeClass}'>${badgeText}</span>
+          </div>
+          
+          <div class="bg-gray-50 rounded-xl p-2 mb-3 text-xs text-gray-600">
+             ${infoField}
+          </div>
+
+          <div class='flex items-center justify-between gap-2'>
+             <div class="flex items-center text-xs text-gray-400">
+               <i class="fas fa-clock w-4 text-center mr-1"></i><span>等待: ${t.wait} min</span>
+             </div>
+             ${actionBtn}
+          </div>
+        `;
+        item.onclick = ()=>{ goDetail(t.id); };
+        list.appendChild(item);
+      });
+    }
+
+    function labelOf(status){ 
+        if(status==='pending') return '待分配'; 
+        if(status==='queue') return '队列中'; 
+        if(status==='working') return '作业中';
+        if(status==='completed') return '已完成';
+        if(status==='cancelled') return '已取消';
+        return status; 
+    }
+    function goDetail(id){ window.location.href = 'dispatcher-task-detail.html?task_id=' + encodeURIComponent(id); }
+    
+    // 底部面板：选择库门
+    let dispatchTargetId = '';
+    let dispatchPanel = window.createSelectionPanel({
+        id: 'dispatchPanel',
+        title: '选择库门',
+        confirmText: '确认分配',
+        onConfirm: function(val){
+            if(!val){ toastShow('请选择库门'); return; }
+            dispatchPanel.close();
+            const t = tasks.find(x=>x.id===dispatchTargetId);
+            if(t){ 
+                t.door = val; 
+                // Update status if pending -> queue
+                if(t.status === 'pending') t.status = 'queue';
+                toastShow(`任务 ${t.id} 已分配至 ${val}`, 'ok'); 
+                render(); 
+            }
+        }
+    });
+
+    function openDispatchPanel(id){ 
+        dispatchTargetId = id;
+        // Filter out paused and limited doors
+        const validDoors = doors.filter(d => d.status !== 'paused' && d.status !== 'limited');
+        
+        const items = validDoors.map(d => {
+             const st = labelDoorStatus(d.status);
+             const oz = d.supportsOversize ? '支持大件' : '不支持大件';
+             return {
+                 value: d.id,
+                 label: `库门 ${d.id} · ${oz} · 排队 ${d.queue} · ${st}`
+             };
+        });
+        dispatchPanel.open(items);
+    }
+    
+    function labelDoorStatus(s){ if(s==='working') return '作业中'; if(s==='idle') return '空闲'; if(s==='paused') return '已暂停'; if(s==='limited') return '限制中'; return s; }
+    function setActiveTabs(){
+      document.getElementById('tabPending').className = 'flex-none px-4 py-1.5 rounded-full font-medium transition-colors ' + (currentFilter==='pending' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+      document.getElementById('tabQueue').className = 'flex-none px-4 py-1.5 rounded-full font-medium transition-colors ' + (currentFilter==='queue' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+      document.getElementById('tabDone').className = 'flex-none px-4 py-1.5 rounded-full font-medium transition-colors ' + (currentFilter==='completed' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200');
+    }
+
+    let currentFilter = initialFilter;
+    document.getElementById('tabPending').onclick = ()=>{ currentFilter='pending'; setActiveTabs(); render(); };
+    document.getElementById('tabQueue').onclick = ()=>{ currentFilter='queue'; setActiveTabs(); render(); };
+    document.getElementById('tabDone').onclick = ()=>{ currentFilter='completed'; setActiveTabs(); render(); };
+    document.getElementById('search').oninput = render;
+    // document.getElementById('sort').onchange = render;
+
+    setActiveTabs();
+    loadData().then(render);
+  </script>
+</body>
+</html>

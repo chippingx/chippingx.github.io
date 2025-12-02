@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>操作员 · 新建卸车记录</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '卸车记录 · 操作员',
+      titleIcon: 'fas fa-dolly',
+      role: 'operator',
+      showBottomNav: false,
+      content: `
+        <div class="px-6 py-4">
+          <div class="text-sm font-semibold text-gray-800 mb-2" id="pageTitle"></div>
+          <div id="editCard" class="card rounded-2xl p-4"></div>
+          <div class="mt-3 flex items-center gap-2">
+            <button id="btnSave" class="px-3 py-2 text-sm rounded bg-indigo-600 text-white"><i class="fas fa-save mr-1"></i>保存</button>
+            <button id="btnCancel" class="px-3 py-2 text-sm rounded bg-gray-100"><i class="fas fa-xmark mr-1"></i>取消</button>
+          </div>
+        </div>
+      `
+    });
+  </script>
+
+  <script>
+    function qs(name){ const u=new URLSearchParams(window.location.search); return u.get(name); }
+    const taskId = qs('task_id') || 'TN20240520001';
+    const recordId = qs('record_id') || '';
+    let type = qs('type') || 'loose';
+    const readonly = qs('readonly')==='true';
+    const from = qs('from') || '';
+    const guardModes = ['专人看护','定时巡检','视频监控'];
+    const guardPersons = [ { id: 'GUARD_A', name: '监护员A' }, { id: 'GUARD_B', name: '监护员B' } ];
+
+    let rec = null;
+    let isEdit = false;
+    try{
+      if(recordId){
+        const raw = localStorage.getItem('unloadRecords:'+taskId);
+        const arr = raw ? JSON.parse(raw) : [];
+        const found = arr.find(r => (r.record_id||r.id) === recordId);
+        if(found){
+          rec = JSON.parse(JSON.stringify(found));
+          type = rec.record_type || type;
+          isEdit = true;
+        }
+      }
+      if(!rec){
+        const rawDraft = sessionStorage.getItem('unloadDraft');
+        rec = rawDraft ? JSON.parse(rawDraft) : null;
+      }
+    }catch(e){ console.error(e); }
+    if(!rec){
+      rec = {
+        record_id: 'r'+Date.now(), task_id: taskId, record_type: type, create_time: new Date().toISOString(), operator: 'OP001',
+        origin_type: type==='tray'?'tray':'loose', origin_id: null, conversion_type: 'none', tray_number: '', goods: (type==='tray'?[]:null), actual_quantity: '', packaging: (type==='tray'?'整托':'散货'),
+        is_oversized: false, oversized_info: { weight:null,length:null,width:null,height:null,volume:null,require_guard:false,guard_mode:'',guardian:'' }, has_damage: false,
+        conversion_new_tray: '', conversion_goods_sku: '', conversion_goods_qty: '', conversion_goods_unit: '', conversion_goods_name: '',
+        convert_to_loose: false, convert_to_tray: false, pack_initialized: false, status: 'unsaved', photos: [], damage_type: '', damage_desc: '', actual_unit: ''
+      };
+    }
+
+    function onEdit(field,val){ rec[field]=val; renderCard(); }
+    function onOversize(field,val){ if(!rec.oversized_info) rec.oversized_info={}; rec.oversized_info[field]= field==='require_guard'?!!val:val; }
+    function editLooseGoods(field,val){ if(!rec.goods) rec.goods={}; rec.goods[field]=val; }
+    function editTrayGoods(field,val){ if(!Array.isArray(rec.goods)) rec.goods=[]; if(!rec.goods[0]) rec.goods[0] = { sku:'', total_quantity:'' }; rec.goods[0][field]=val; }
+
+    function scanTray(){ if(readonly) return;
+      scanOverlay({ text:'扫描托盘码...', duration: 1200, onDone: function(){
+        var code = 'TP'+Date.now().toString().slice(-6);
+        if(type==='loose'){
+          rec.conversion_new_tray = code;
+        } else {
+          rec.tray_number = code;
+        }
+        renderCard();
+      }});
+    }
+    function scanGoods(){ if(readonly) return; scanOverlay({ text:'扫描商品号...', duration: 1200, onDone: function(){ var code = 'GD'+Date.now().toString().slice(-6); var name='示例商品-'+code.slice(-4); if(type==='loose'){ if(!rec.goods) rec.goods={}; rec.goods.sku=code; rec.goods.name = rec.goods.name || name; } else { rec.conversion_goods_sku = code; rec.conversion_goods_name = rec.conversion_goods_name || name; } renderCard(); }}); }
+    function takePhoto(){ if(readonly) return; scanOverlay({ text:'拍照中...', duration:1200, onDone: function(){ var pid='ph'+Date.now(); rec.photos.push({id:pid, url:'https://picsum.photos/seed/'+pid+'/80/80'}); renderCard(); toastShow('已上传（模拟）','ok'); }}); }
+    function deletePhoto(pid){ if(readonly) return; rec.photos = (rec.photos||[]).filter(function(p){ return p.id!==pid; }); renderCard(); }
+
+    function validate(){
+      if(type==='tray'){
+        if(!rec.tray_number){ toastShow('请扫描有效托盘条码'); return false; }
+        if(rec.convert_to_loose){ if(!rec.conversion_goods_sku || !rec.conversion_goods_qty || !rec.conversion_goods_unit){ toastShow('请填写散货商品号/有效数量/单位'); return false; } }
+      } else {
+        if(!rec.goods?.sku){ toastShow('请填写散货商品号'); return false; }
+        if(!(rec.actual_quantity && Number(rec.actual_quantity)>0)){ toastShow('请填写有效的散货数量'); return false; }
+        if(!rec.actual_unit){ toastShow('请填写数量单位'); return false; }
+        if(rec.convert_to_tray && !rec.conversion_new_tray){ toastShow('请扫描有效托盘条码'); return false; }
+      }
+      if(rec.photos.length<1){ toastShow('请至少拍摄 1 张现场照片'); return false; }
+      if((rec.has_damage || rec.is_oversized) && rec.photos.length<2){ toastShow('破损或大件需至少 2 张现场照片'); return false; }
+      if(rec.has_damage && !rec.damage_type){ toastShow('请填写破损类型'); return false; }
+      if(rec.is_oversized){
+        if(!rec.oversized_info?.guard_mode){ toastShow('请设置大件监护方式'); return false; }
+        if(!rec.oversized_info?.guardian){ toastShow('请填写监护人'); return false; }
+      }
+      return true;
+    }
+
+    function save(){ if(readonly) { cancel(); return; }
+      if(!validate()) return;
+      var key='unloadRecords:'+taskId;
+      try{
+        var raw=localStorage.getItem(key);
+        var arr= raw?JSON.parse(raw):[];
+        if(isEdit){
+          var idx = arr.findIndex(function(r){ return (r.record_id||r.id)===recordId; });
+          if(idx>=0){
+            var originalStatus = arr[idx].status;
+            var keepStatus = originalStatus==='done' ? 'done' : 'saved';
+            rec.status = keepStatus;
+            arr[idx] = rec;
+          } else {
+            rec.status = 'saved';
+            arr.push(rec);
+          }
+        } else {
+          rec.status='saved';
+          arr.push(rec);
+        }
+        localStorage.setItem(key, JSON.stringify(arr));
+      }catch(e){ console.error(e); }
+      toastShow('记录已保存','ok');
+      setTimeout(function(){ window.location.href = 'operator-unloading-task.html?task_id='+encodeURIComponent(taskId)+'&refresh=true'; }, 800);
+    }
+    function cancel(){
+      if(from==='task_detail'){
+        window.location.href = 'operator-task-detail.html?task_id='+encodeURIComponent(taskId);
+      } else {
+        window.location.href = 'operator-unloading-task.html?task_id='+encodeURIComponent(taskId)+'&refresh=true';
+      }
+    }
+
+    function renderCard(){
+      var title = (readonly? '查看卸车记录 · ' : (isEdit? '编辑卸车记录 · ' : '新建卸车记录 · ')) + (type==='tray'?'整托':'散货');
+      document.getElementById('pageTitle').textContent = title;
+      var html = '';
+      html += `<div class='text-sm font-semibold text-gray-800 mb-2'>${title}</div>`;
+      html += `<div class='grid grid-cols-1 gap-2 text-xs'>
+        ${type==='tray' ? `
+          <div>
+            <div class='text-gray-500 mb-1'>托盘码</div>
+            <div class='flex items-center gap-2'>
+              <input class='flex-1 px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.tray_number||''}' oninput='rec.tray_number=this.value' />
+              ${readonly?'':"<button class='px-2 py-1 text-xs rounded bg-gray-100' onclick='scanTray()'><i class='fas fa-qrcode'></i></button>"}
+            </div>
+          </div>
+          <div class='mt-1'>
+            <label class='inline-flex items-center gap-2'><input type='checkbox' ${readonly?'disabled':''} ${rec.convert_to_loose?'checked':''} onchange='rec.convert_to_loose=this.checked; renderCard()' /> <span>改为散货</span></label>
+          </div>
+          ${rec.convert_to_loose ? `
+          <div>
+            <div class='text-gray-500 mb-1'>商品号</div>
+            <div class='flex items-center gap-2'>
+              <input class='flex-1 px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.conversion_goods_sku||''}' oninput='rec.conversion_goods_sku=this.value' />
+              ${readonly?'':"<button class='px-2 py-1 text-xs rounded bg-gray-100' onclick='scanGoods()'><i class='fas fa-qrcode'></i></button>"}
+            </div>
+          </div>
+          <div>
+            <div class='text-gray-500 mb-1'>商品名称（可选）</div>
+            <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} placeholder='可选，扫码自动带出' value='${rec.conversion_goods_name||''}' oninput='rec.conversion_goods_name=this.value' />
+          </div>
+          <div class='grid grid-cols-2 gap-2'>
+            <div>
+              <div class='text-gray-500 mb-1'>数量</div>
+              <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.conversion_goods_qty||''}' oninput='rec.conversion_goods_qty=this.value' />
+            </div>
+            <div>
+              <div class='text-gray-500 mb-1'>单位</div>
+              <select class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} onchange='rec.conversion_goods_unit=this.value'>
+                <option value=''>请选择</option>
+                <option value='件' ${rec.conversion_goods_unit==='件'?'selected':''}>件</option>
+                <option value='箱' ${rec.conversion_goods_unit==='箱'?'selected':''}>箱</option>
+                <option value='托' ${rec.conversion_goods_unit==='托'?'selected':''}>托</option>
+                <option value='kg' ${rec.conversion_goods_unit==='kg'?'selected':''}>kg</option>
+              </select>
+            </div>
+          </div>` : ''}
+        ` : `
+          <div>
+            <div class='text-gray-500 mb-1'>商品号</div>
+            <div class='flex items-center gap-2'>
+              <input class='flex-1 px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.goods?.sku||''}' oninput='editLooseGoods("sku", this.value); renderCard()' />
+              ${readonly?'':"<button class='px-2 py-1 text-xs rounded bg-gray-100' onclick='scanGoods()'><i class='fas fa-qrcode'></i></button>"}
+            </div>
+          </div>
+          <div>
+            <div class='text-gray-500 mb-1'>商品名称（可选）</div>
+            <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} placeholder='可选，扫码自动带出' value='${rec.goods?.name||''}' oninput='editLooseGoods("name", this.value)' />
+          </div>
+          <div class='grid grid-cols-2 gap-2'>
+            <div>
+              <div class='text-gray-500 mb-1'>数量</div>
+              <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.actual_quantity||''}' oninput='rec.actual_quantity=this.value' />
+            </div>
+            <div>
+              <div class='text-gray-500 mb-1'>单位</div>
+              <select class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} onchange='rec.actual_unit=this.value'>
+                <option value=''>请选择</option>
+                <option value='件' ${rec.actual_unit==='件'?'selected':''}>件</option>
+                <option value='箱' ${rec.actual_unit==='箱'?'selected':''}>箱</option>
+                <option value='托' ${rec.actual_unit==='托'?'selected':''}>托</option>
+                <option value='kg' ${rec.actual_unit==='kg'?'selected':''}>kg</option>
+              </select>
+            </div>
+          </div>
+          <div class='mt-1'>
+            <label class='inline-flex items-center gap-2'><input type='checkbox' ${readonly?'disabled':''} ${rec.convert_to_tray?'checked':''} onchange='rec.convert_to_tray=this.checked; renderCard()' /> <span>改为整托</span></label>
+          </div>
+          ${rec.convert_to_tray ? `
+          <div>
+            <div class='text-gray-500 mb-1'>托盘码</div>
+            <div class='flex items-center gap-2'>
+              <input class='flex-1 px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.conversion_new_tray||''}' oninput='rec.conversion_new_tray=this.value' />
+              ${readonly?'':"<button class='px-2 py-1 text-xs rounded bg-gray-100' onclick='scanTray()'><i class='fas fa-qrcode'></i></button>"}
+            </div>
+          </div>` : ''}
+        `}
+      </div>`;
+
+      html += `
+      <div class='rounded-xl border border-gray-200 p-3 mt-2'>
+        <div class='text-sm font-semibold text-gray-800 mb-2'>货物状态</div>
+        <div class='grid grid-cols-1 gap-2 text-xs'>
+          <label class='inline-flex items-center gap-2'><input type='checkbox' ${readonly?'disabled':''} ${rec.is_oversized?'checked':''} onchange='rec.is_oversized=this.checked; renderCard()' /> <span>大件/超长/超重</span></label>
+        </div>
+        <div class='grid grid-cols-2 gap-2 mt-2 text-xs'>
+          <div>
+            <div class='text-gray-500 mb-1'>重量(kg)</div>
+            <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.oversized_info?.weight||''}' oninput='onOversize("weight", this.value)' />
+          </div>
+          <div>
+            <div class='text-gray-500 mb-1'>体积(m³)</div>
+            <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.oversized_info?.volume||''}' oninput='onOversize("volume", this.value)' />
+          </div>
+        </div>
+        ${rec.is_oversized ? `
+        <div class='mt-2 text-xs'>
+          <div class='text-gray-500 mb-1'>长/宽/高(cm)</div>
+          <div class='grid grid-cols-3 gap-2'>
+            <input class='px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} placeholder='长' value='${rec.oversized_info?.length||''}' oninput='onOversize("length", this.value)' />
+            <input class='px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} placeholder='宽' value='${rec.oversized_info?.width||''}' oninput='onOversize("width", this.value)' />
+            <input class='px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} placeholder='高' value='${rec.oversized_info?.height||''}' oninput='onOversize("height", this.value)' />
+          </div>
+        </div>
+        <div class='mt-2 text-xs'>
+          <div class='text-gray-500 mb-1'>监护方式</div>
+          <select class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} onchange='onOversize("guard_mode", this.value)'>
+            <option value=''>请选择</option>
+            ${guardModes.map(function(m){ return `<option value='${m}' ${rec.oversized_info?.guard_mode===m?'selected':''}>${m}</option>`; }).join('')}
+          </select>
+        </div>
+        <div class='mt-2 text-xs'>
+          <div class='text-gray-500 mb-1'>监护人</div>
+          <select class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} onchange='onOversize("guardian", this.value)'>
+            <option value=''>请选择</option>
+            ${guardPersons.map(function(p){ return `<option value='${p.id}' ${rec.oversized_info?.guardian===p.id?'selected':''}>${p.name}</option>`; }).join('')}
+          </select>
+        </div>
+        ` : ''}
+        <div class='mt-2 text-xs'>
+          <label class='inline-flex items-center gap-2'><input type='checkbox' ${readonly?'disabled':''} ${rec.has_damage?'checked':''} onchange='rec.has_damage=this.checked; renderCard()' /> <span>货物破损</span></label>
+        </div>
+        ${rec.has_damage ? `
+        <div class='grid grid-cols-2 gap-2 mt-2 text-xs'>
+          <div>
+            <div class='text-gray-500 mb-1'>破损类型</div>
+            <select class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} onchange='rec.damage_type=this.value'>
+              <option value=''>请选择</option>
+              <option value='包装破损' ${rec.damage_type==='包装破损'?'selected':''}>包装破损</option>
+              <option value='货品破损' ${rec.damage_type==='货品破损'?'selected':''}>货品破损</option>
+            </select>
+          </div>
+          <div>
+            <div class='text-gray-500 mb-1'>备注（可选）</div>
+            <input class='w-full px-2 py-1 border border-gray-200 rounded' ${readonly?'disabled':''} value='${rec.damage_desc||''}' oninput='rec.damage_desc=this.value' />
+          </div>
+        </div>` : ''}
+      </div>`;
+
+      html += `
+      <div class='rounded-xl border border-gray-200 p-3 mt-2'>
+        <div class='text-sm font-semibold text-gray-800 mb-2'>拍照</div>
+        <div class='flex items-center gap-2'>
+          <button class='px-2 py-1 text-xs rounded bg-gray-100' onclick='takePhoto()'><i class='fas fa-camera'></i> 拍摄照片 +</button>
+          <div class='text-xs text-gray-600'>已拍摄 ${rec.photos.length}</div>
+        </div>
+        <div class='mt-2 grid grid-cols-5 gap-2'>
+          ${(rec.photos||[]).map(function(p){ return `
+            <div class='relative'>
+              <img src='${p.url||"https://via.placeholder.com/80?text=%E7%8E%B0%E5%9C%BA"}' class='w-16 h-16 rounded object-cover border border-gray-200' />
+              <button class='absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 text-white text-xs' onclick='deletePhoto("${p.id}")'>×</button>
+            </div>
+          `; }).join('')}
+        </div>
+      </div>`;
+
+      document.getElementById('editCard').innerHTML = html;
+    }
+
+    if(readonly){ document.getElementById('btnSave').style.display='none'; document.getElementById('btnCancel').textContent='返回'; }
+    document.getElementById('btnSave').addEventListener('click', save);
+    document.getElementById('btnCancel').addEventListener('click', cancel);
+    renderCard();
+  </script>
+</body>
+</html>

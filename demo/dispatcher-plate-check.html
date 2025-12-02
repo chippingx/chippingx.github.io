@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>调度员 · 车号校对</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '车号校对 · 调度员',
+      titleIcon: 'fas fa-id-card',
+      role: 'dispatcher',
+      activeNav: 'operate',
+      content: `
+        <div class="px-6 py-4 pb-28">
+          <div class="card rounded-2xl p-4 mb-3">
+            <div class="text-sm font-semibold text-gray-800 mb-2">扫描或输入车牌</div>
+            <div class="flex items-center gap-2">
+              <div class="relative flex-1">
+                <input id="plateInput" class="w-full pr-10 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="请输入车牌" />
+                <button class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500" onclick="scanPlate()"><i class="fas fa-camera"></i></button>
+              </div>
+              <button class="px-3 py-2 text-sm rounded bg-indigo-600 text-white" onclick="findTask()"><i class="fas fa-search mr-1"></i>搜索</button>
+            </div>
+          </div>
+
+          <div id="taskCard" class="card rounded-2xl p-4 mb-3 hidden">
+            <div class="mb-2">
+              <div class="text-sm font-semibold text-gray-800">任务 <span id="tId">-</span></div>
+            </div>
+            <div class="mb-2">
+              <div class="text-xl font-bold text-indigo-700">库门 <span id="tDoor">-</span></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div>预报车牌 <span id="tPre">-</span></div>
+              <div>司机 <span id="tDriver">-</span></div>
+              <div>手机号 <span id="tPhone">-</span></div>
+              <div>货主 <span id="tOwner">-</span></div>
+            </div>
+          </div>
+
+          <div id="checkCard" class="card rounded-2xl p-4 hidden">
+            <div class="text-sm font-semibold text-gray-800 mb-2">现场车牌校对</div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <div class="text-xs text-gray-600 mb-1">预报车牌</div>
+                <input id="prePlate" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" readonly />
+              </div>
+              <div>
+                <div class="text-xs text-gray-600 mb-1">现场车牌</div>
+                <input id="actualPlate" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+              </div>
+            </div>
+            <div class="mt-3 flex items-center justify-between">
+              <div>
+                <button id="backBtn" class="hidden px-3 py-2 text-sm rounded bg-gray-100" onclick="goBack()"><i class="fas fa-arrow-left mr-1"></i>返回</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="checkStatus" class="hidden text-sm font-semibold text-green-700">已校对</span>
+                <button id="checkBtn" class="px-3 py-2 text-sm rounded bg-indigo-600 text-white" onclick="doCheck()"><i class="fas fa-check mr-1"></i>校对</button>
+              </div>
+            </div>
+          </div>
+          <div id="confirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+            <div class="bg-white rounded-2xl p-4 w-72">
+              <div class="text-lg font-semibold text-gray-800 mb-2">确认提示</div>
+              <div class="text-sm text-gray-600 mb-4">实际车牌号与预报不一致，是否继续进仓？</div>
+              <div class="grid grid-cols-2 gap-2">
+                <button class="px-3 py-2 text-sm rounded bg-gray-100 text-gray-800" onclick="closeConfirmModal()">取消</button>
+                <button class="px-3 py-2 text-sm rounded bg-indigo-600 text-white" onclick="confirmCheck()">确认</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    });
+
+    const sampleTasks = [
+      { id: 'TN20240520011', plate: '沪C12345', door: 'A-02', prePlate: '沪C12345', driver: '张师傅', phone: '13800001234', owner: '华东分拨中心' },
+      { id: 'TN20240520012', plate: '沪D88888', door: 'A-01', prePlate: '沪D88888', driver: '李师傅', phone: '13900004567', owner: '上海仓配' }
+    ];
+    let currentTask = null;
+
+    function scanPlate(){
+      scanOverlay({ onDone: function(){
+        const v = '沪C12345';
+        document.getElementById('plateInput').value = v;
+        findTask();
+      }});
+    }
+
+    function findTask(){
+      const q = (document.getElementById('plateInput').value||'').trim();
+      if(!q){ toastShow('请输入车牌'); return; }
+      const t = sampleTasks.find(x=>x.plate===q);
+      currentTask = t || null;
+      const tc = document.getElementById('taskCard');
+      const cc = document.getElementById('checkCard');
+      if(!t){ tc.classList.add('hidden'); cc.classList.add('hidden'); toastShow('未找到匹配任务'); return; }
+      document.getElementById('tId').textContent = t.id;
+      document.getElementById('tDoor').textContent = t.door;
+      document.getElementById('tPre').textContent = t.prePlate;
+      document.getElementById('tDriver').textContent = t.driver || '-';
+      document.getElementById('tPhone').textContent = t.phone || '-';
+      document.getElementById('tOwner').textContent = t.owner || '-';
+      document.getElementById('prePlate').value = t.prePlate;
+      document.getElementById('actualPlate').value = q;
+      tc.classList.remove('hidden');
+      cc.classList.remove('hidden');
+    }
+
+    function doCheck(){
+      const pre = (document.getElementById('prePlate').value||'').trim();
+      const act = (document.getElementById('actualPlate').value||'').trim();
+      if(!pre || !act){ toastShow('请填写完整车牌'); return; }
+      if(pre!==act){
+        document.getElementById('confirmModal').classList.remove('hidden');
+      } else {
+        toastShow('校对一致','ok');
+        finalizeCheck();
+      }
+    }
+
+    function closeConfirmModal(){
+      document.getElementById('confirmModal').classList.add('hidden');
+    }
+
+    function confirmCheck(){
+      closeConfirmModal();
+      toastShow('已记录不一致并允许进仓','ok');
+      finalizeCheck();
+    }
+
+    function finalizeCheck(){
+      document.getElementById('actualPlate').readOnly = true;
+      document.getElementById('checkBtn').classList.add('hidden');
+      document.getElementById('backBtn').classList.remove('hidden');
+      document.getElementById('checkStatus').classList.remove('hidden');
+    }
+
+    function goBack(){ history.back(); }
+  </script>
+</body>
+</html>

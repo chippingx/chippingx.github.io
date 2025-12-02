@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>操作员 · 任务详情</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '任务详情 · 操作员',
+      titleIcon: 'fas fa-list',
+      role: 'operator',
+      activeNav: 'tasks',
+      content: `
+        <div class="flex flex-col h-full relative">
+          <div class="flex-1 overflow-y-auto px-6 py-4 pb-28 scrollbar-hide">
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 relative overflow-hidden">
+               <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-full -mr-10 -mt-10 z-0"></div>
+               <div class="relative z-10 flex items-center justify-between">
+                 <div>
+                   <div class="text-xs text-gray-500 mb-1">任务号</div>
+                   <div id="ovId" class="text-xl font-bold text-gray-800 tracking-tight">--</div>
+                 </div>
+                 <div class="text-right">
+                   <div id="ovStatusBadge" class="inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600">--</div>
+                   <div class="text-xs text-gray-400 mt-2 mb-1"><i class="fas fa-clock mr-1"></i>等待 <span id="ovWait">--</span></div>
+                 </div>
+               </div>
+            </div>
+
+            <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+              <button id="tabBasic" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">基本信息</button>
+              <button id="tabUnload" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">卸货记录</button>
+              <button id="tabDispatch" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">调度信息</button>
+              <button id="tabSupervis" class="flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50">监管</button>
+            </div>
+
+            <div id="panelBasic" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+              <div class="grid grid-cols-2 gap-y-4 gap-x-4 text-sm">
+                  <div class="col-span-2 pb-3 border-b border-gray-50 flex items-center justify-between">
+                    <span class="text-gray-500">车牌号码</span>
+                    <span id="acPlate" class="font-bold text-indigo-600 text-base">--</span>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-400 mb-0.5">客户名称</div>
+                    <div id="tfCustomer" class="font-medium text-gray-800">--</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-400 mb-0.5">司机</div>
+                    <div id="tfDriver" class="font-medium text-gray-800">--</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-400 mb-0.5">联系方式</div>
+                    <div id="tfPhone" class="font-medium text-gray-800">--</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-gray-400 mb-0.5">预报大件</div>
+                    <div id="unOversize" class="font-medium text-gray-800">--</div>
+                  </div>
+                  <div class="col-span-2 pt-2 text-xs text-gray-500 italic border-t border-gray-50" id="acTip"></div>
+              </div>
+            </div>
+
+            <div id="panelDispatch" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-random text-indigo-500 mr-2"></i>调度信息</div>
+              <div class="space-y-3 text-sm">
+                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
+                   <span class="text-gray-500">当前库门</span>
+                   <div id="dpDoor" class="font-bold text-indigo-600 text-base">--</div>
+                </div>
+                <div class="flex items-center justify-between border-b border-gray-50 pb-2">
+                   <span class="text-gray-500">队列位置</span>
+                   <div id="dpQueue" class="font-medium text-gray-800">--</div>
+                </div>
+                <div class="flex items-center justify-between">
+                   <span class="text-gray-500">限制状态</span>
+                   <div id="dpLimit" class="font-medium text-gray-800">--</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="panelUnload" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="flex items-center justify-between mb-3">
+                  <div class="text-sm font-bold text-gray-800 flex items-center"><i class="fas fa-dolly text-indigo-500 mr-2"></i>卸货记录</div>
+                  <div id="unProgress" class="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg font-medium">托盘 0/0, 散货 0/0</div>
+              </div>
+              
+              <div id="unList" class="space-y-3"></div>
+            </div>
+
+            <div id="panelSupervis" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-4 hidden">
+              <div class="text-sm font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-shield-alt text-indigo-500 mr-2"></i>监管信息</div>
+              <div id="svTip" class="text-xs text-gray-500 italic">当前没有监管记录</div>
+            </div>
+          </div>
+
+          <div class="absolute bottom-4 left-4 right-4 bg-white rounded-2xl shadow-lg shadow-gray-200 border border-gray-100 p-3 z-40 flex items-center gap-3">
+              <button class="p-3 rounded-xl bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors" onclick="goBack()"><i class="fas fa-arrow-left"></i></button>
+              <button id="btnCTA" class="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-medium shadow-sm active:scale-[0.98] transition-transform flex items-center justify-center">
+                <i class="fas fa-dolly mr-2"></i>去卸车
+              </button>
+          </div>
+        </div>
+      `
+    });
+  </script>
+  <script>
+    function qs(name){ const u=new URLSearchParams(window.location.search); return u.get(name); }
+    const taskId = qs('task_id') || 'TN20240530001';
+    const APP_DATA_FALLBACK = { operatorTasks:[{ id:'TN20240530001', stage:'waiting_unload', plate:'沪G12999', door:'A-02', queue:'排位 1', waiting_me:true, type:'loose', category:'进仓' }] };
+    let appData = null;
+    function loadData(){ if(appData) return Promise.resolve(appData); const url = new URL('app-data.json', document.baseURI).href; if(location.protocol==='file:'){ appData = APP_DATA_FALLBACK; return Promise.resolve(appData); } return fetch(url).then(r=>{ if(!r.ok) throw new Error('fail'); return r.json(); }).then(d=>{ appData=d; return d; }).catch(()=>{ appData = APP_DATA_FALLBACK; return appData; }); }
+    function active(tab){ 
+      ['Basic','Dispatch','Unload','Supervis'].forEach(function(x){ 
+        var btn=document.getElementById('tab'+x); 
+        var p=document.getElementById('panel'+x); 
+        if(btn&&p){ 
+          if(x===tab){ 
+            btn.className = 'flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm';
+            p.classList.remove('hidden'); 
+          } else { 
+            btn.className = 'flex-none px-4 py-2 rounded-xl text-sm font-medium transition-all bg-transparent text-gray-500 border border-transparent hover:bg-gray-50';
+            p.classList.add('hidden'); 
+          } 
+        } 
+      }); 
+    }
+    function goUnload(){ window.location.href = 'operator-unloading-task.html?task_id='+encodeURIComponent(taskId); }
+    function goBack(){ window.location.href = 'operator-task-list.html?filter=waiting_me'; }
+    function render(){ loadData().then(function(){ var t=(appData.operatorTasks||[]).find(function(x){ return x.id===taskId; }) || { id: taskId, category:'进仓' };
+      document.getElementById('ovId').textContent = t.id;
+      
+      // Status Badge
+      const sb = document.getElementById('ovStatusBadge');
+      sb.textContent = labelStage(t.stage);
+      if(t.stage==='completed') sb.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700 border border-green-100';
+      else if(t.waiting_me===true) sb.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-100';
+      else sb.className = 'inline-block px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200';
+
+      // Mock wait time
+      document.getElementById('ovWait').textContent = Math.floor(Math.random() * 60) + ' min';
+
+      // Basic Info
+      var plateText = t.stage==='waiting_inbound_accept' ? (t.plate||'--') : (t.plate||'--');
+      document.getElementById('acPlate').textContent = plateText;
+      document.getElementById('tfCustomer').textContent = t.ownerName || t.customer || '--';
+      document.getElementById('tfDriver').textContent = t.driver || t.ownerContact || '--';
+      document.getElementById('tfPhone').textContent = t.driverPhone || t.ownerPhone || '--';
+      var oz = document.getElementById('unOversize'); if(oz){ oz.textContent = (t.hasOversize===true ? '是' : (t.hasOversize===false ? '否' : '--')); }
+      document.getElementById('acTip').textContent = t.stage==='waiting_inbound_accept' ? '请核对车牌后点击下方按钮受理' : '已完成进仓受理';
+      
+      document.getElementById('dpDoor').textContent = t.door || '--';
+      document.getElementById('dpQueue').textContent = t.queue || '未入队';
+      document.getElementById('dpLimit').textContent = '正常';
+      
+      var recs = getUnloadRecords(taskId);
+      var trayTotal = recs.filter(function(r){ return r.record_type==='tray'; }).length;
+      var trayDone = recs.filter(function(r){ return r.record_type==='tray' && r.status==='done'; }).length;
+      var looseTotal = recs.filter(function(r){ return r.record_type==='loose'; }).length;
+      var looseDone = recs.filter(function(r){ return r.record_type==='loose' && r.status==='done'; }).length;
+      document.getElementById('unProgress').textContent = '托盘 '+trayDone+'/'+trayTotal+', 散货 '+looseDone+'/'+looseTotal;
+      
+      var list=document.getElementById('unList'); list.innerHTML=''; 
+      if(recs.length===0){ list.innerHTML = `<div class='text-xs text-gray-400 italic py-2 text-center'>暂无卸车记录</div>`; } 
+      else { 
+        recs.forEach(function(r){ 
+          var row=document.createElement('div'); 
+          row.className='bg-gray-50 rounded-xl p-3 border border-gray-100 flex items-center justify-between'; 
+          var rid=(r.record_id||r.id); 
+          var href='operator-unloading-edit.html?task_id='+encodeURIComponent(taskId)+'&record_id='+encodeURIComponent(rid)+'&readonly=true&from=task_detail'; 
+          row.innerHTML = `
+            <div>
+              <div class='text-sm font-bold text-gray-800'>${r.record_type==='tray'?'整托':'散货'} · ${rid}</div>
+              <div class='text-xs text-gray-500 mt-0.5'>状态 ${r.status||'--'}</div>
+            </div>
+            <a class='w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-indigo-600 transition-colors' href='${href}'><i class='fas fa-chevron-right text-xs'></i></a>
+          `; 
+          list.appendChild(row); 
+        }); 
+      }
+      
+      var showCTA = (t.category==='进仓') && (t.stage==='waiting_unload' || t.stage==='unloading' || t.stage==='waiting_inbound_accept');
+      var btnText = '去卸车';
+      if(t.stage==='waiting_inbound_accept') btnText = '进仓受理';
+      
+      const btnCTA = document.getElementById('btnCTA');
+      if(showCTA){
+          btnCTA.style.display = 'flex';
+          btnCTA.innerHTML = `<i class="fas fa-${t.stage==='waiting_inbound_accept'?'check-double':'dolly'} mr-2"></i>${btnText}`;
+          btnCTA.onclick = function(){ 
+             if(t.stage==='waiting_inbound_accept') window.location.href='operator-inbound-accept.html?task_id='+encodeURIComponent(taskId);
+             else goUnload();
+          };
+      } else {
+          btnCTA.style.display = 'none';
+      }
+    }); }
+    function labelStage(stage){ if(stage==='waiting_unload') return '待卸货'; if(stage==='unloading') return '卸货中'; if(stage==='waiting_inbound_accept') return '待受理'; if(stage==='waiting_door_assign') return '待分配库门'; if(stage==='waiting_call') return '待叫车'; if(stage==='supervision' || stage==='waiting_supervision') return '监管介入'; if(stage==='completed') return '已完成'; return '待处理'; }
+    function getUnloadRecords(id){ try{ var raw=localStorage.getItem('unloadRecords:'+id); return raw?JSON.parse(raw):[]; }catch(e){ return []; } }
+    document.getElementById('tabBasic').onclick=function(){ active('Basic'); };
+    document.getElementById('tabDispatch').onclick=function(){ active('Dispatch'); };
+    document.getElementById('tabUnload').onclick=function(){ active('Unload'); };
+    document.getElementById('tabSupervis').onclick=function(){ active('Supervis'); };
+    document.getElementById('btnCTA').onclick = goUnload;
+    active('Basic');
+    render();
+  </script>
+</body>
+</html>

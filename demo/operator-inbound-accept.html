@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>操作员 · 进仓受理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <script src="./simulator-layout.js"></script>
+  <script src="./common.js"></script>
+  <script>
+    initSimulatorLayout({
+      title: '进仓受理 · 操作员',
+      titleIcon: 'fas fa-warehouse',
+      role: 'operator',
+      activeNav: 'operate',
+      content: `
+        <div class="px-6 py-4 pb-28">
+          <div class="card rounded-2xl p-4 mb-3">
+            <div class="text-sm font-semibold text-gray-800 mb-2"><i class="fas fa-barcode mr-2 text-indigo-600"></i>进仓任务号</div>
+            <div class="flex items-center gap-2">
+              <input id="taskNo" class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="任务号（可扫码）" />
+              <button class="px-3 py-2 text-xs rounded bg-gray-100" onclick="scanTask()"><i class="fas fa-qrcode mr-1"></i>扫码</button>
+            </div>
+          </div>
+
+          <div class="card rounded-2xl p-4 mb-3">
+            <div class="text-sm font-semibold text-gray-800 mb-2"><i class="fas fa-id-card mr-2 text-indigo-600"></i>车辆与司机</div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-gray-500 mb-1">预报车牌</div>
+                <div id="prePlateText" class="px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-800">--</div>
+              </div>
+              <div>
+                <div class="text-gray-500 mb-1">实际车牌 <span class="text-red-500">*</span></div>
+                <input id="realPlate" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+              <div>
+                <div class="text-gray-500 mb-1">司机姓名 <span class="text-red-500">*</span></div>
+                <input id="driverName" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+              <div>
+                <div class="text-gray-500 mb-1">司机电话</div>
+                <input id="driverPhone" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card rounded-2xl p-4 mb-3">
+            <div class="text-sm font-semibold text-gray-800 mb-2"><i class="fas fa-building mr-2 text-indigo-600"></i>货主信息</div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-gray-500 mb-1">货主名称</div>
+                <input id="ownerName" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+              <div>
+                <div class="text-gray-500 mb-1">联系电话</div>
+                <input id="ownerPhone" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+            </div>
+          </div>
+
+          <div class="sticky bottom-[60px]">
+            <div class="flex gap-3">
+              <button class="flex-1 px-3 py-2 text-sm rounded bg-gray-100 text-gray-700" onclick="cancelAccept()"><i class="fas fa-arrow-left mr-1"></i>取消</button>
+              <button class="flex-1 px-3 py-2 text-sm rounded bg-indigo-600 text-white" onclick="submitAccept()"><i class="fas fa-check mr-1"></i>提交受理</button>
+            </div>
+          </div>
+          
+          <div id="confirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+             <div class="bg-white rounded-2xl p-4 w-72">
+               <div class="text-lg font-semibold text-gray-800 mb-2">确认提示</div>
+               <div class="text-sm text-gray-600 mb-4">实际车牌号与预报不一致，是否继续进仓？</div>
+               <div class="grid grid-cols-2 gap-2">
+                 <button class="px-3 py-2 text-sm rounded bg-gray-100 text-gray-800" onclick="closeConfirmModal()">取消</button>
+                 <button class="px-3 py-2 text-sm rounded bg-indigo-600 text-white" onclick="confirmSubmit()">确认</button>
+               </div>
+             </div>
+           </div>
+        </div>
+      `
+    });
+  </script>
+
+  <script>
+    let appData = null; let selectedTask = null;
+    const APP_DATA_FALLBACK = { inboundTasks:[{id:'TN20240520011',status:'waiting_inbound',prePlate:'沪A88888',packType:'pallet',hasUnloadingRecords:false,ownerName:'华东电子',ownerContact:'张三',ownerPhone:'13900000001'},{id:'TN20240520012',status:'completed',prePlate:'沪B12345',packType:'loose',hasUnloadingRecords:true,ownerName:'南方制造',ownerContact:'李四',ownerPhone:'13900000002'},{id:'TN20240520013',status:'cancelled',prePlate:'沪C56789',packType:null,hasUnloadingRecords:false,ownerName:'北方商贸',ownerContact:'王五',ownerPhone:'13900000003'}], packOptions:['pallet','loose','oversize'] };
+    function loadData(){ if(appData) return Promise.resolve(appData); const url = new URL('app-data.json', document.baseURI).href; if(location.protocol==='file:'){ appData = APP_DATA_FALLBACK; return Promise.resolve(appData); } return fetch(url).then(r=>{ if(!r.ok) throw new Error('fail'); return r.json(); }).then(d=>{ appData=d; return d; }).catch(()=>{ appData = APP_DATA_FALLBACK; return appData; }); }
+    function scanTask(){ loadData().then(()=>{ scanOverlay({ duration: 3000, text: '模拟扫码中...', onDone: function(){ const t=(appData.inboundTasks||[]).find(x=>x.status==='waiting_inbound'); if(t){ selectedTask=t; document.getElementById('taskNo').value=t.id; document.getElementById('prePlateText').textContent=t.prePlate||''; document.getElementById('ownerName').value=t.ownerName||''; document.getElementById('ownerPhone').value=t.ownerPhone||''; } } }); }); }
+    function submitAccept(){ loadData().then(()=>{
+      const id = (document.getElementById('taskNo').value||'').trim();
+      const real = (document.getElementById('realPlate').value||'').trim();
+      const dname = (document.getElementById('driverName').value||'').trim();
+      const dphone = (document.getElementById('driverPhone').value||'').trim();
+      if(!id){ toastShow('请输入进仓任务号'); return; }
+      const t = (appData.inboundTasks||[]).find(x=>x.id===id);
+      if(!t){ toastShow('未找到对应进仓任务，请确认后重试'); return; }
+      if(['completed','cancelled'].includes(t.status)){ toastShow('当前任务状态不可进仓'); return; }
+      if(!real || !dname){ toastShow('请填写完整必填信息'); return; }
+      
+      if(t.prePlate && real !== t.prePlate){
+          document.getElementById('confirmModal').classList.remove('hidden');
+      } else {
+          finalizeSubmit();
+      }
+    }); }
+
+    function closeConfirmModal(){ document.getElementById('confirmModal').classList.add('hidden'); }
+    function confirmSubmit(){ closeConfirmModal(); finalizeSubmit(); }
+    function finalizeSubmit(){ toastShow('提交成功','ok'); setTimeout(function(){ window.location.href = 'operator-home.html'; }, 1200); }
+    
+    function cancelAccept(){ window.location.href = 'operator-home.html'; }
+    loadData();
+  </script>
+</body>
+</html>
